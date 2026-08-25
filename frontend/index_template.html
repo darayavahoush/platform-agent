@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NAV_TRACE // platform-agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E13;
+    --panel:#10161D;
+    --panel-2:#141B23;
+    --line:#1D2733;
+    --text:#E7ECF2;
+    --text-dim:#7C8798;
+    --live:#45E0C4;
+    --live-dim:#1E4A45;
+    --risk:#F2A44A;
+    --danger:#F2545B;
+    --pending:#3D4756;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'Inter',sans-serif;}
+  body{min-height:100vh;}
+  ::selection{background:var(--live-dim);color:var(--live);}
+
+  .frame{
+    display:grid;
+    grid-template-columns: 1fr 300px;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "hdr  hdr"
+      "main side"
+      "tick tick";
+    max-width:1180px;
+    margin:0 auto;
+    min-height:100vh;
+    border-left:1px solid var(--line);
+    border-right:1px solid var(--line);
+    background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0/100% 28px,
+      var(--bg);
+    background-blend-mode:normal;
+  }
+
+  header{grid-area:hdr;padding:22px 28px 16px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--live);
+    box-shadow:0 0 8px var(--live);display:inline-block;transform:translateY(-1px);}
+  h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
+    letter-spacing:.14em;margin:0;text-transform:uppercase;}
+  h1 span{color:var(--text-dim);font-weight:400;}
+  .sub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);
+    letter-spacing:.06em;}
+
+  main{grid-area:main;padding:22px 28px;}
+  .viewport-label{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;
+    margin-bottom:10px;display:flex;justify-content:space-between;}
+  .viewport-label b{color:var(--live);font-weight:500;}
+
+  #canvasWrap{position:relative;border:1px solid var(--line);border-radius:6px;
+    overflow:hidden;background:
+      radial-gradient(circle at 30% 20%, rgba(69,224,196,0.04), transparent 60%),
+      #0C1218;}
+  canvas{display:block;width:100%;height:auto;}
+
+  .controls{margin-top:14px;display:flex;align-items:center;gap:12px;}
+  .btn{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.06em;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:5px;cursor:pointer;transition:border-color .15s,color .15s;}
+  .btn:hover{border-color:var(--live);color:var(--live);}
+  .btn:focus-visible{outline:2px solid var(--live);outline-offset:2px;}
+  input[type=range]{flex:1;accent-color:var(--live);}
+  .speedRow{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--text-dim);}
+  .speedRow select{background:var(--panel);color:var(--text);border:1px solid var(--line);
+    border-radius:4px;font-family:inherit;font-size:11px;padding:4px 6px;}
+
+  aside{grid-area:side;border-left:1px solid var(--line);padding:22px 20px;}
+  .side-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;}
+  .module{border:1px solid var(--line);border-radius:6px;padding:12px 13px;margin-bottom:10px;
+    background:var(--panel);}
+  .module .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .module .name{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;}
+  .pill{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;
+    padding:2px 7px;border-radius:20px;font-weight:700;}
+  .pill.live{color:var(--live);background:var(--live-dim);}
+  .pill.pending{color:var(--text-dim);background:#1A212B;}
+  .module p{margin:0;font-size:11.5px;color:var(--text-dim);line-height:1.5;}
+  .module .owner{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--pending);
+    margin-top:8px;letter-spacing:.04em;}
+
+  .ticker{grid-area:tick;border-top:1px solid var(--line);padding:14px 28px;
+    display:flex;gap:28px;flex-wrap:wrap;background:var(--panel-2);}
+  .stat{font-family:'JetBrains Mono',monospace;}
+  .stat .k{font-size:9.5px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;
+    display:block;margin-bottom:3px;}
+  .stat .v{font-size:15px;font-weight:700;}
+  .v.live{color:var(--live);}
+  .v.risk{color:var(--risk);}
+  .v.danger{color:var(--danger);}
+
+  @media (max-width:820px){
+    .frame{grid-template-columns:1fr;grid-template-areas:"hdr" "main" "side" "tick";}
+    aside{border-left:none;border-top:1px solid var(--line);}
+  }
+  @media (prefers-reduced-motion:reduce){
+    * {animation:none !important; transition:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>NAV_TRACE <span>/ platform-agent</span></h1>
+    </div>
+    <div class="sub">LEVEL_01 · A*+MCTS PLANNER · RECORDED RUN</div>
+  </header>
+
+  <main>
+    <div class="viewport-label">
+      <span>AGENT VIEWPORT</span>
+      <span>PATH RISK <b id="riskLabel">0.00</b></span>
+    </div>
+    <div id="canvasWrap"><canvas id="cv" width="800" height="200"></canvas></div>
+    <div class="controls">
+      <button class="btn" id="playBtn">▶ PLAY</button>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub through trace">
+      <div class="speedRow">
+        SPEED
+        <select id="speed" aria-label="Playback speed">
+          <option value="60">1×</option>
+          <option value="30">2×</option>
+          <option value="15" selected>4×</option>
+          <option value="5">12×</option>
+        </select>
+      </div>
+    </div>
+  </main>
+
+  <aside>
+    <div class="side-label">Module Status</div>
+
+    <div class="module">
+      <div class="row"><span class="name">01 · PERCEPTION</span><span class="pill pending">PENDING</span></div>
+      <p>CNN detection + LSTM trajectory tracking of platforms/enemies from raw frames.</p>
+      <div class="owner">OWNER — Member 1</div>
+    </div>
+
+    <div class="module">
+      <div class="row"><span class="name">02 · PLANNING</span><span class="pill live">LIVE</span></div>
+      <p>A* macro route + lightweight MCTS rollout search for jump timing. Driving this run.</p>
+      <div class="owner">OWNER — Member 2 (this build)</div>
+    </div>
+
+    <div class="module">
+      <div class="row"><span class="name">03 · POLICY (RL)</span><span class="pill pending">PENDING</span></div>
+      <p>PPO/DQN control policy trained to generalize across level distributions.</p>
+      <div class="owner">OWNER — Member 3</div>
+    </div>
+
+    <div class="module">
+      <div class="row"><span class="name">04 · MISSION (LLM/RAG)</span><span class="pill pending">PENDING</span></div>
+      <p>Strategic subgoals + reward shaping from mission text, grounded via RAG.</p>
+      <div class="owner">OWNER — Member 4</div>
+    </div>
+  </aside>
+
+  <div class="ticker">
+    <div class="stat"><span class="k">Tick</span><span class="v" id="statTick">0</span></div>
+    <div class="stat"><span class="k">Player Tile</span><span class="v" id="statTile">—</span></div>
+    <div class="stat"><span class="k">Action</span><span class="v live" id="statAction">—</span></div>
+    <div class="stat"><span class="k">Risk</span><span class="v risk" id="statRisk">0.00</span></div>
+    <div class="stat"><span class="k">Reward (Σ)</span><span class="v" id="statReward">0.00</span></div>
+    <div class="stat"><span class="k">Collectibles</span><span class="v" id="statCollect">0/1</span></div>
+    <div class="stat"><span class="k">Hazard Hits</span><span class="v danger" id="statHits">0</span></div>
+  </div>
+</div>
+
+<script>
+const TRACE = __TRACE_JSON__;
+
+const level = TRACE.level;
+const ticks = TRACE.ticks;
+const TW = level.tile_w;
+const NT = level.n_tiles;
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const groundY = 150;
+
+function movingPlatformTile(t){
+  const mp = level.moving_platform;
+  const phase = (t % mp.period) / mp.period;
+  const tri = (4*Math.abs(phase-0.5)-1) * mp.amplitude_tiles;
+  return Math.round(mp.home_tile + tri);
+}
+function enemyTile(t){
+  const [lo,hi] = level.enemy.patrol_tiles;
+  const span = hi-lo;
+  if(span===0) return lo;
+  const cyc = t % (2*span);
+  return lo + Math.abs(cyc-span);
+}
+
+let visited = [];
+
+function draw(idx){
+  const frame = ticks[idx];
+  ctx.clearRect(0,0,W,H);
+
+  // faint grid
+  ctx.strokeStyle = '#141B23';
+  ctx.lineWidth = 1;
+  for(let x=0;x<=W;x+=TW){ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,H);ctx.stroke();}
+
+  // ground / gaps
+  for(let i=0;i<NT;i++){
+    const x = i*TW;
+    if(level.ground[i]===1){
+      ctx.fillStyle = '#1B2530';
+      ctx.fillRect(x, groundY, TW, H-groundY);
+      ctx.fillStyle = '#25313F';
+      ctx.fillRect(x, groundY, TW, 2);
+    }
+  }
+
+  // moving platform
+  const mpTile = movingPlatformTile(frame.t);
+  ctx.fillStyle = '#F2A44A';
+  ctx.fillRect(mpTile*TW+2, groundY-4, TW-4, 6);
+  ctx.shadowColor='#F2A44A'; ctx.shadowBlur=8;
+  ctx.fillRect(mpTile*TW+2, groundY-4, TW-4, 6);
+  ctx.shadowBlur=0;
+
+  // enemy
+  const enTile = enemyTile(frame.t);
+  ctx.fillStyle = '#F2545B';
+  ctx.beginPath();
+  ctx.arc(enTile*TW+TW/2, groundY-10, 6, 0, Math.PI*2);
+  ctx.fill();
+
+  // collectible
+  if(!frame.collected){
+    ctx.fillStyle = '#F2E14A';
+    ctx.save();
+    ctx.translate(level.collectible_tile*TW+TW/2, groundY-12);
+    ctx.rotate(Math.PI/4);
+    ctx.fillRect(-5,-5,10,10);
+    ctx.restore();
+  }
+
+  // goal
+  ctx.strokeStyle = '#45E0C4';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  ctx.moveTo(level.goal_tile*TW+TW/2, groundY-40);
+  ctx.lineTo(level.goal_tile*TW+TW/2, groundY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // trail (glowing path of visited tiles up to idx)
+  ctx.strokeStyle = 'rgba(69,224,196,0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for(let i=0;i<=idx;i++){
+    const px = ticks[i].player_tile*TW+TW/2;
+    const py = groundY-14;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+
+  // player
+  const px = frame.player_tile*TW+TW/2;
+  ctx.fillStyle = '#E7ECF2';
+  ctx.shadowColor = '#45E0C4'; ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(px, groundY-14, 7, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // stats
+  document.getElementById('statTick').textContent = frame.t;
+  document.getElementById('statTile').textContent = frame.player_tile;
+  document.getElementById('statAction').textContent = frame.action;
+  document.getElementById('statRisk').textContent = frame.risk.toFixed(2);
+  document.getElementById('riskLabel').textContent = frame.risk.toFixed(2);
+  document.getElementById('statReward').textContent = frame.reward_total.toFixed(2);
+  document.getElementById('statCollect').textContent = (frame.collected?1:0)+'/1';
+  document.getElementById('statHits').textContent = frame.hits;
+  document.getElementById('scrub').value = idx;
+}
+
+let playing = false, idx = 0, timer = null;
+const scrub = document.getElementById('scrub');
+const playBtn = document.getElementById('playBtn');
+const speedSel = document.getElementById('speed');
+
+scrub.max = ticks.length - 1;
+
+function step(){
+  if(idx >= ticks.length-1){ playing=false; playBtn.textContent='▶ PLAY'; return; }
+  idx++;
+  draw(idx);
+  timer = setTimeout(step, parseInt(speedSel.value,10));
+}
+
+playBtn.addEventListener('click', ()=>{
+  playing = !playing;
+  playBtn.textContent = playing ? '❚❚ PAUSE' : '▶ PLAY';
+  if(playing){
+    if(idx >= ticks.length-1) idx = 0;
+    step();
+  } else {
+    clearTimeout(timer);
+  }
+});
+scrub.addEventListener('input', (e)=>{
+  playing = false; clearTimeout(timer);
+  playBtn.textContent = '▶ PLAY';
+  idx = parseInt(e.target.value,10);
+  draw(idx);
+});
+
+draw(0);
+</script>
+</body>
+</html>
