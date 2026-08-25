@@ -1,0 +1,37 @@
+:root{
+  --bg:#0A0E13;
+  --panel:#10161D;
+  --panel-2:#141B23;
+  --line:#1D2733;
+  --text:#E7ECF2;
+  --text-dim:#7C8798;
+  --live:#45E0C4;
+  --live-dim:#173F3A;
+  --risk:#F2A44A;
+  --risk-dim:#3A2C15;
+  --danger:#F2545B;
+  --pending:#3D4756;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+}
+
+*{box-sizing:border-box;}
+html,body,#root{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--live-dim);color:var(--live);}
+
+button{font-family:inherit;}
+button:focus-visible, input:focus-visible, select:focus-visible{
+  outline:2px solid var(--live);
+  outline-offset:2px;
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important; transition:none !important;}
+}
