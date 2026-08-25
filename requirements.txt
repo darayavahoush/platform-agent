@@ -1,0 +1,13 @@
+numpy
+pytest
+# member1_perception (add as you build)
+torch
+torchvision
+# member2_planning
+networkx
+# member3_rl
+gymnasium
+torch
+# member4_llm_rag
+sentence-transformers
+faiss-cpu
