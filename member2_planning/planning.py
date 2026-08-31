@@ -148,6 +148,14 @@ class HybridPlanningModule(PlanningModule):
         self.graph: Optional[LevelGraph] = None
         self._cached_path: list[int] = []
         self._last_start: Optional[int] = None
+        self._external_hazard_predictor = None
+
+    def set_hazard_predictor(self, predictor):
+        """Set an optional external hazard predictor with signature:
+        predictor(t_offset: int) -> set[int]. When set, this overrides the
+        default state.entities-based hazard logic for tactical planning.
+        """
+        self._external_hazard_predictor = predictor
 
     def set_level(self, ground: list[int], hazard_tiles: set[int],
                   bridge_tiles: set[int] = frozenset()):
@@ -174,7 +182,7 @@ class HybridPlanningModule(PlanningModule):
         next_tiles = self._cached_path[idx:idx + 6]
         target_tile = next_tiles[1] if len(next_tiles) > 1 else next_tiles[0]
 
-        def hazard_predictor(t_offset: int):
+        def default_hazard_predictor(t_offset: int):
             hazards = set(self.graph.hazards)
             for e in state.entities:
                 if e.kind == "moving_platform":
@@ -191,6 +199,7 @@ class HybridPlanningModule(PlanningModule):
                         hazards.add(pos)
             return hazards
 
+        hazard_predictor = self._external_hazard_predictor or default_hazard_predictor
         action, risk = self.mcts.search(player_tile, target_tile, hazard_predictor)
         waypoints = [(t * TILE_W, state.player.y) for t in next_tiles]
         return Plan(waypoints=waypoints, committed_action=action, risk_score=risk)

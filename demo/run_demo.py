@@ -12,15 +12,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from demo.demo_env import DemoPlatformEnv
 from demo.level import (GROUND, HAZARD_TILES, BRIDGE_TILES, TILE_W, N_TILES,
                          COLLECTIBLE_TILE, GOAL_TILE, MOVING_PLATFORM, ENEMY)
+from member1_perception.perception import CNNLSTMPerception
 from member2_planning.planning import HybridPlanningModule
 
 
 def main():
     env = DemoPlatformEnv()
     planner = HybridPlanningModule()
+    perception = CNNLSTMPerception(history_len=8, horizon=5)
     planner.set_level(GROUND, HAZARD_TILES, BRIDGE_TILES)
 
-    state, _ = env.reset()
+    state, frame = env.reset()
+    history = []
     trace = {
         "level": {
             "tile_w": TILE_W, "n_tiles": N_TILES, "ground": GROUND,
@@ -31,9 +34,33 @@ def main():
     }
 
     for _ in range(400):
+        history.append(frame)
+        if len(history) > perception.history_len:
+            history = history[-perception.history_len:]
+
+        perception_output = perception.process(frame, history)
+
+        def hazard_predictor(t_offset: int) -> set[int]:
+            hazards: set[int] = set()
+            for entity in perception_output.entities:
+                if entity.kind not in {"moving_platform", "enemy"}:
+                    continue
+                track_id = entity.extra.get("id")
+                if track_id is None:
+                    continue
+                trajectory = perception_output.predicted_trajectories.get(track_id, [])
+                if not trajectory:
+                    continue
+                if t_offset >= len(trajectory):
+                    continue
+                pred_x, _ = trajectory[t_offset]
+                hazards.add(round(pred_x / TILE_W))
+            return hazards
+
+        planner.set_hazard_predictor(hazard_predictor)
         plan = planner.plan(state)
         action = plan.committed_action
-        state, _frame, reward, done, info = env.step(action)
+        state, frame, reward, done, info = env.step(action)
 
         trace["ticks"].append({
             "t": state.tick,

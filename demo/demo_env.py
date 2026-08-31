@@ -111,4 +111,55 @@ class DemoPlatformEnv:
         return self._frame().rgb
 
     def _frame(self) -> Frame:
-        return Frame(rgb=np.zeros((40, N_TILES * TILE_W, 3), dtype=np.uint8), tick=self.tick)
+        h = 40
+        w = N_TILES * TILE_W
+        rgb = np.zeros((h, w, 3), dtype=np.uint8)
+
+        # Background
+        rgb[:] = [70, 120, 200]
+
+        # Ground/platform tiles
+        ground_y0 = h - 18
+        ground_h = 18
+        for tile_idx, solid in enumerate(GROUND):
+            if solid == 1:
+                x0 = tile_idx * TILE_W
+                rgb[ground_y0:ground_y0 + ground_h, x0:x0 + TILE_W] = [34, 139, 34]
+
+        # Player
+        player_x = int(round(self.player_tile * TILE_W))
+        player_y = ground_y0 - 12
+        rgb[player_y:player_y + 12, player_x:player_x + TILE_W - 4] = [255, 215, 0]
+
+        # Moving platform
+        mp_tile = self._moving_platform_tile()
+        mp_x = mp_tile * TILE_W
+        mp_y = 20
+        mp_w = TILE_W * 2
+        mp_h = 8
+        rgb[mp_y:mp_y + mp_h, mp_x:mp_x + mp_w] = [160, 82, 45]
+
+        # Enemy
+        enemy_tile = self._enemy_tile()
+        enemy_x = enemy_tile * TILE_W
+        enemy_y = ground_y0 - 10
+        rgb[enemy_y:enemy_y + 10, enemy_x:enemy_x + TILE_W] = [220, 50, 50]
+
+        # Collectible
+        if not self.collected:
+            cx = COLLECTIBLE_TILE * TILE_W + TILE_W // 2
+            cy = ground_y0 - 10
+            for dy in range(-6, 7):
+                for dx in range(-6, 7):
+                    if dx * dx + dy * dy <= 36:
+                        x = cx + dx
+                        y = cy + dy
+                        if 0 <= x < w and 0 <= y < h:
+                            rgb[y, x] = [255, 255, 0]
+
+        # Small goal marker at the far right
+        goal_x = (N_TILES - 2) * TILE_W + TILE_W // 2
+        goal_y = ground_y0 - 12
+        rgb[goal_y:goal_y + 12, goal_x - 4:goal_x + 4] = [255, 255, 255]
+
+        return Frame(rgb=rgb, tick=self.tick)
