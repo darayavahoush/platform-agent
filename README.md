@@ -12,7 +12,7 @@ collecting an item on the way to the goal.
 
 | # | Package | Owns | Status |
 |---|---|---|---|
-| 1 | `member1_perception/` | CNN visual perception + LSTM temporal modeling | 🔲 Stub — interface only |
+| 1 | `member1_perception/` | CNN visual perception + LSTM temporal modeling | ✅ **Implemented** |
 | 2 | `member2_planning/` | A* global route planning + MCTS tactical decisions | ✅ **Implemented** |
 | 3 | `member3_rl/` | PPO/DQN policy learning, generalization | 🔲 Stub — interface only |
 | 4 | `member4_llm_rag/` | LLM/SLM + RAG mission interpretation, integration | 🔲 Stub — interface only (orchestrator wiring exists) |
