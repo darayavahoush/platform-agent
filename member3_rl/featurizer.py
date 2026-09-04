@@ -54,16 +54,18 @@ class GameStateFeaturizer:
         )
 
     def _platform_features(self, entity, player):
-        dx = entity.x - player.x
+        width = entity.extra.get("width", 100)
+        near_edge_dx = entity.x - player.x
+        far_edge_dx = (entity.x + width) - player.x
         dy = entity.y - player.y
 
         return [
-            self._normalize(dx, self.position_scale),
+            self._normalize(near_edge_dx, self.position_scale),
+            self._normalize(far_edge_dx, self.position_scale),
             self._normalize(dy, self.position_scale),
-            self._normalize(entity.extra.get("width", 100), 160.0),
-            self._normalize(entity.vy, self.velocity_scale),
+            self._normalize(width, 160.0),
             self._type_id(entity.kind) / 2.0,
-            self._normalize(abs(dx), self.distance_scale),
+            self._normalize(min(abs(near_edge_dx), abs(far_edge_dx)), self.distance_scale),
         ]
 
     def _hazard_features(self, entity, player):
@@ -98,6 +100,8 @@ class GameStateFeaturizer:
         goal_dy = state.goal[1] - player.y
         goal_dist = np.hypot(goal_dx, goal_dy)
 
+        is_grounded = 1.0 if abs(player.vy) < 0.5 else 0.0
+
         features = [
             self._normalize(player.x, 450.0),
             self._normalize(player.y, 300.0),
@@ -106,7 +110,7 @@ class GameStateFeaturizer:
             self._normalize(goal_dx, self.position_scale),
             self._normalize(goal_dy, self.position_scale),
             self._normalize(goal_dist, self.distance_scale),
-            self._normalize(state.tick, self.tick_scale),
+            is_grounded,
         ]
 
         entities = list(state.entities)

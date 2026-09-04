@@ -24,7 +24,7 @@ class QNetwork(nn.Module):
 
 
 class ReplayBuffer:
-    def __init__(self, capacity=50000):
+    def __init__(self, capacity=150000):
         self.buffer = deque(maxlen=capacity)
 
     def add(self, state, action, reward, next_state, done):
@@ -55,12 +55,12 @@ class DQNAgent:
         obs_dim=64,
         action_dim=6,
         gamma=0.99,
-        learning_rate=1e-3,
+        learning_rate=2.5e-4,
         batch_size=64,
-        target_update=250,
+        target_update=1000,
         epsilon_start=1.0,
-        epsilon_end=0.05,
-        epsilon_decay=10000,
+        epsilon_end=0.10,
+        epsilon_decay=150000,
     ):
         self.obs_dim = obs_dim
         self.action_dim = action_dim
@@ -234,6 +234,10 @@ class DQNAgent:
         self.optimizer.step()
 
         self.learn_steps += 1
+
+        if self.learn_steps % 500 == 0:
+            avg_q = current_q.mean().item()
+            print(f"    [diag] learn_step={self.learn_steps} avg_q={avg_q:.3f} loss={loss.item():.4f}")
 
         if self.learn_steps % self.target_update == 0:
             self.target_network.load_state_dict(

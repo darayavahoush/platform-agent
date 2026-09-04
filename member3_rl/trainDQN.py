@@ -12,8 +12,9 @@ from member3_rl.policy import DQNPolicy
 # CONFIGURATION
 # ============================================================
 
-NUM_EPISODES = 1000
-MAX_STEPS = 250
+CURRICULUM_EPISODES = 1400
+NUM_EPISODES = 3000
+MAX_STEPS = 300
 
 EVAL_EVERY = 50
 EVAL_EPISODES = 20
@@ -76,6 +77,9 @@ def train():
         episode_seed = BASE_SEED + episode
 
         env.rng = np.random.default_rng(episode_seed)
+
+        difficulty = min(1.0, episode / CURRICULUM_EPISODES)
+        env.set_difficulty(difficulty)
 
         state, frame = env.reset()
 
@@ -298,6 +302,7 @@ def evaluate(policy, start_seed=10000, episodes=20):
 
     total_reward = 0.0
     successful = 0
+    fail_reasons = {"timeout": 0, "hazard": 0, "enemy": 0, "fell": 0, "other": 0}
 
     for i in range(episodes):
 
@@ -336,11 +341,16 @@ def evaluate(policy, start_seed=10000, episodes=20):
                 successful += 1
 
             if done:
+                if not info.get("reached_goal", False):
+                    reason = info.get("reason", "timeout" if info.get("timeout") else "other")
+                    fail_reasons[reason] = fail_reasons.get(reason, 0) + 1
                 break
 
         total_reward += episode_reward
 
     average_reward = total_reward / episodes
+
+    print(f"  Failure breakdown: {fail_reasons}")
 
     return average_reward, successful
 

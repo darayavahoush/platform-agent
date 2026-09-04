@@ -60,6 +60,10 @@ class MockPlatformEnv(BaseEnv):
 
         self.visited_platforms: set[int] = set()
         self.previous_distance = 0.0
+        self.difficulty = 1.0
+
+    def set_difficulty(self, difficulty: float):
+        self.difficulty = float(np.clip(difficulty, 0.0, 1.0))
 
     # ==========================================================
     # LEVEL GENERATION
@@ -87,11 +91,15 @@ class MockPlatformEnv(BaseEnv):
 
         # Five additional main platforms. Their route varies by seed.
         for i in range(5):
-            gap = int(self.rng.integers(35, 66))
+            max_gap = 35 + int(30 * self.difficulty)
+            gap = int(self.rng.integers(35, max_gap + 1))
             width = int(self.rng.integers(100, 141))
 
-            # Keep vertical changes physically reasonable.
-            delta_y = int(self.rng.integers(-55, 56))
+            # Vertical timing is harder to learn than horizontal spacing,
+            # so it ramps in on a slower, squared curve relative to difficulty.
+            vertical_difficulty = self.difficulty ** 2
+            delta_range = max(1, int(55 * vertical_difficulty))
+            delta_y = int(self.rng.integers(-delta_range, delta_range + 1))
             y = int(np.clip(y + delta_y, 285, 430))
 
             x += gap
@@ -115,7 +123,7 @@ class MockPlatformEnv(BaseEnv):
         for i, platform in enumerate(self.platforms[1:], start=1):
             width = platform.extra["width"]
 
-            if i >= 2 and self.rng.random() < 0.40:
+            if i >= 2 and self.rng.random() < 0.40 * self.difficulty:
                 hazard_x = platform.x + width * 0.55
                 self.hazards.append(
                     Entity(
@@ -126,7 +134,7 @@ class MockPlatformEnv(BaseEnv):
                     )
                 )
 
-            if i >= 2 and self.rng.random() < 0.35:
+            if i >= 2 and self.rng.random() < 0.35 * self.difficulty:
                 enemy_x = platform.x + width * 0.35
                 self.enemies.append(
                     Entity(
@@ -388,16 +396,12 @@ class MockPlatformEnv(BaseEnv):
         progress = old_distance - new_distance
 
         # Much smaller progress reward than before.
-        reward = -0.04
-        reward += float(np.clip(progress, -3.0, 3.0)) * 0.03
+        reward = -0.002
+        reward += float(np.clip(progress, -3.0, 3.0)) * 0.008
 
         # Reward a successful landing, especially on a new main platform.
         if landed:
-            reward += 0.75
-
-        # Discourage repeatedly walking in place without progress.
-        if abs(progress) < 0.10:
-            reward -= 0.01
+            reward += 0.075
 
         # Hazards / enemies / fall are terminal and strongly negative.
         if self._check_hazard_collision():
@@ -405,7 +409,7 @@ class MockPlatformEnv(BaseEnv):
             return (
                 self._get_state(),
                 self._frame(),
-                -15.0,
+                -1.5,
                 True,
                 {
                     "reached_goal": False,
@@ -420,7 +424,7 @@ class MockPlatformEnv(BaseEnv):
             return (
                 self._get_state(),
                 self._frame(),
-                -15.0,
+                -1.5,
                 True,
                 {
                     "reached_goal": False,
@@ -435,7 +439,7 @@ class MockPlatformEnv(BaseEnv):
             return (
                 self._get_state(),
                 self._frame(),
-                -20.0,
+                -2.0,
                 True,
                 {
                     "reached_goal": False,
@@ -456,7 +460,7 @@ class MockPlatformEnv(BaseEnv):
             return (
                 self._get_state(),
                 self._frame(),
-                50.0,
+                5.0,
                 True,
                 {
                     "reached_goal": True,
@@ -471,7 +475,7 @@ class MockPlatformEnv(BaseEnv):
             return (
                 self._get_state(),
                 self._frame(),
-                -8.0,
+                -1.8,
                 True,
                 {
                     "reached_goal": False,
