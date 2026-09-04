@@ -1,34 +1,56 @@
-"""Member 3: PPO/DQN policy that learns navigation/control, optionally
-conditioned on Plan (from Member 2) and PerceptionOutput/embedding (from
-Member 1). Must generalize to unseen levels -> train across a level
-distribution, not a single level. Implement PolicyModule from core.interfaces.
-"""
-from core.interfaces import PolicyModule, Action, GameState, Plan, PerceptionOutput
-from typing import Optional
+from core.interfaces import (
+    PolicyModule,
+    Action,
+    GameState,
+    Plan,
+    PerceptionOutput,
+)
 
-
-class PPOPolicy(PolicyModule):
-    def __init__(self, obs_dim: int = 64, action_dim: int = len(Action)):
-        # TODO: actor-critic network. Obs = symbolic GameState features
-        # (+ optional perception.embedding) (+ plan.waypoints/risk as aux input).
-        pass
-
-    def act(self, state: GameState, plan: Optional[Plan] = None,
-            perception: Optional[PerceptionOutput] = None) -> Action:
-        raise NotImplementedError
-
-    def train_step(self, *args, **kwargs) -> dict:
-        raise NotImplementedError
+from member3_rl.featurizer import GameStateFeaturizer
+from member3_rl.dqn import DQNAgent
 
 
 class DQNPolicy(PolicyModule):
-    """Baseline for comparison against PPO; simpler discrete-action off-policy learner."""
-    def __init__(self, obs_dim: int = 64, action_dim: int = len(Action)):
-        pass
 
-    def act(self, state: GameState, plan: Optional[Plan] = None,
-            perception: Optional[PerceptionOutput] = None) -> Action:
-        raise NotImplementedError
+    def __init__(self, obs_dim=65, action_dim=len(Action)):
 
-    def train_step(self, *args, **kwargs) -> dict:
-        raise NotImplementedError
+        self.featurizer = GameStateFeaturizer(
+            position_scale=256.0,
+            velocity_scale=10.0,
+            distance_scale=256.0,
+            tick_scale=1000.0,
+        )
+
+        self.agent = DQNAgent(
+            obs_dim=obs_dim,
+            action_dim=action_dim,
+        )
+
+    def act(
+        self,
+        state: GameState,
+        plan: Plan = None,
+        perception: PerceptionOutput = None,
+        training=True,
+    ) -> Action:
+
+        observation = self.featurizer.transform(
+            state,
+            plan,
+            perception,
+        )
+
+        action_index = self.agent.select_action(
+            observation,
+            training=training,
+        )
+
+        return Action(action_index)
+
+    def train_step(self, *args, **kwargs):
+
+        loss = self.agent.learn()
+
+        return {
+            "loss": loss
+        }
