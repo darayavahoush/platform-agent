@@ -61,6 +61,10 @@ class MockPlatformEnv(BaseEnv):
         self.visited_platforms: set[int] = set()
         self.previous_distance = 0.0
         self.difficulty = 1.0
+        self.difficulty = 1.0
+
+    def set_difficulty(self, difficulty: float):
+        self.difficulty = float(np.clip(difficulty, 0.0, 1.0))
 
     def set_difficulty(self, difficulty: float):
         self.difficulty = float(np.clip(difficulty, 0.0, 1.0))
