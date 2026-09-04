@@ -12,7 +12,7 @@ from member3_rl.dqn import DQNAgent
 
 class DQNPolicy(PolicyModule):
 
-    def __init__(self, obs_dim=71, action_dim=len(Action)):
+    def __init__(self, obs_dim=65, action_dim=len(Action)):
 
         self.featurizer = GameStateFeaturizer(
             position_scale=256.0,

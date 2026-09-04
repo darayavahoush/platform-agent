@@ -19,7 +19,7 @@ class GameStateFeaturizer:
       type_id, horizontal_distance
     """
 
-    OBS_DIM = 71
+    OBS_DIM = 65
 
     def __init__(
         self,
@@ -53,32 +53,6 @@ class GameStateFeaturizer:
             1.0,
         )
 
-    @staticmethod
-    def _find_next_platform(state, player):
-        platforms = [
-            e for e in state.entities
-            if e.kind in ("platform", "moving_platform")
-        ]
-
-        candidates = []
-
-        for platform in platforms:
-            width = float(
-                platform.extra.get("width", 100)
-            )
-
-            right_edge = platform.x + width
-
-            if right_edge > player.x + 10:
-                candidates.append(platform)
-
-        if not candidates:
-            return None
-
-        return min(
-            candidates,
-            key=lambda p: p.x
-        )
     def _platform_features(self, entity, player):
         width = entity.extra.get("width", 100)
         near_edge_dx = entity.x - player.x
@@ -114,33 +88,6 @@ class GameStateFeaturizer:
             self._normalize(entity.vx, self.velocity_scale),
         ]
 
-    @staticmethod
-    def _is_grounded(state):
-        player = state.player
-        bottom = player.y + 32.0
-
-        for platform in state.entities:
-            if platform.kind not in ("platform", "moving_platform"):
-                continue
-
-            width = float(
-                platform.extra.get("width", 100)
-            )
-
-            overlap = (
-                player.x + 24.0 > platform.x
-                and player.x < platform.x + width
-            )
-
-            close_to_top = abs(
-                bottom - platform.y
-            ) < 3.0
-
-            if overlap and close_to_top and abs(player.vy) < 0.5:
-                return True
-
-        return False
-
     def transform(
         self,
         state: GameState,
@@ -153,7 +100,7 @@ class GameStateFeaturizer:
         goal_dy = state.goal[1] - player.y
         goal_dist = np.hypot(goal_dx, goal_dy)
 
-        is_grounded = 1.0 if self._is_grounded(state) else 0.0
+        is_grounded = 1.0 if abs(player.vy) < 0.5 else 0.0
 
         features = [
             self._normalize(player.x, 450.0),
@@ -165,22 +112,6 @@ class GameStateFeaturizer:
             self._normalize(goal_dist, self.distance_scale),
             is_grounded,
         ]
-
-        # Explicit next-platform information
-        next_platform = self._find_next_platform(
-            state,
-            player
-        )
-
-        if next_platform is not None:
-            features.extend(
-                self._platform_features(
-                    next_platform,
-                    player
-                )
-            )
-        else:
-            features.extend([0.0] * 6)
 
         entities = list(state.entities)
 
@@ -261,6 +192,3 @@ class GameStateFeaturizer:
         )
 
         return obs
-
-
-

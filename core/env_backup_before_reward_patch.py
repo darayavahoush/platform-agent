@@ -399,30 +399,13 @@ class MockPlatformEnv(BaseEnv):
         new_distance = self._distance_to_goal()
         progress = old_distance - new_distance
 
-        # Navigation-focused reward shaping.
-        reward = -0.03
+        # Much smaller progress reward than before.
+        reward = -0.002
+        reward += float(np.clip(progress, -3.0, 3.0)) * 0.008
 
-        # Reward movement toward the goal.
-        reward += float(np.clip(progress, -3.0, 3.0)) * 0.05
-
-        # Reward discovering a new platform.
+        # Reward a successful landing, especially on a new main platform.
         if landed:
-            reward += 2.0
-
-        # Small penalty for making no progress.
-        if abs(progress) < 0.10:
-            reward -= 0.015
-
-        # Encourage horizontal movement toward the goal.
-        goal_dx_old = self.goal[0] - self.player.x
-        goal_direction = 1.0 if goal_dx_old > 0 else -1.0
-
-        if self.player.vx * goal_direction > 0.5:
-            reward += 0.015
-
-        # Penalize substantial movement away from the goal.
-        if self.player.vx * goal_direction < -0.5:
-            reward -= 0.02
+            reward += 0.075
 
         # Hazards / enemies / fall are terminal and strongly negative.
         if self._check_hazard_collision():
