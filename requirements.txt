@@ -11,3 +11,4 @@ torch
 # member4_llm_rag
 sentence-transformers
 faiss-cpu
+requests
