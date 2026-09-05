@@ -1,0 +1,409 @@
+﻿diff --git a/core/env.py b/core/env.py
+index 86737e6..6cef7a4 100644
+--- a/core/env.py
++++ b/core/env.py
+@@ -60,6 +60,14 @@ class MockPlatformEnv(BaseEnv):
+ 
+         self.visited_platforms: set[int] = set()
+         self.previous_distance = 0.0
++        self.difficulty = 1.0
++        self.difficulty = 1.0
++
++    def set_difficulty(self, difficulty: float):
++        self.difficulty = float(np.clip(difficulty, 0.0, 1.0))
++
++    def set_difficulty(self, difficulty: float):
++        self.difficulty = float(np.clip(difficulty, 0.0, 1.0))
+ 
+     # ==========================================================
+     # LEVEL GENERATION
+@@ -87,11 +95,15 @@ class MockPlatformEnv(BaseEnv):
+ 
+         # Five additional main platforms. Their route varies by seed.
+         for i in range(5):
+-            gap = int(self.rng.integers(35, 66))
++            max_gap = 35 + int(30 * self.difficulty)
++            gap = int(self.rng.integers(35, max_gap + 1))
+             width = int(self.rng.integers(100, 141))
+ 
+-            # Keep vertical changes physically reasonable.
+-            delta_y = int(self.rng.integers(-55, 56))
++            # Vertical timing is harder to learn than horizontal spacing,
++            # so it ramps in on a slower, squared curve relative to difficulty.
++            vertical_difficulty = self.difficulty ** 2
++            delta_range = max(1, int(55 * vertical_difficulty))
++            delta_y = int(self.rng.integers(-delta_range, delta_range + 1))
+             y = int(np.clip(y + delta_y, 285, 430))
+ 
+             x += gap
+@@ -115,7 +127,7 @@ class MockPlatformEnv(BaseEnv):
+         for i, platform in enumerate(self.platforms[1:], start=1):
+             width = platform.extra["width"]
+ 
+-            if i >= 2 and self.rng.random() < 0.40:
++            if i >= 2 and self.rng.random() < 0.40 * self.difficulty:
+                 hazard_x = platform.x + width * 0.55
+                 self.hazards.append(
+                     Entity(
+@@ -126,7 +138,7 @@ class MockPlatformEnv(BaseEnv):
+                     )
+                 )
+ 
+-            if i >= 2 and self.rng.random() < 0.35:
++            if i >= 2 and self.rng.random() < 0.35 * self.difficulty:
+                 enemy_x = platform.x + width * 0.35
+                 self.enemies.append(
+                     Entity(
+@@ -387,17 +399,30 @@ class MockPlatformEnv(BaseEnv):
+         new_distance = self._distance_to_goal()
+         progress = old_distance - new_distance
+ 
+-        # Much smaller progress reward than before.
+-        reward = -0.04
+-        reward += float(np.clip(progress, -3.0, 3.0)) * 0.03
++        # Navigation-focused reward shaping.
++        reward = -0.03
++
++        # Reward movement toward the goal.
++        reward += float(np.clip(progress, -3.0, 3.0)) * 0.05
+ 
+-        # Reward a successful landing, especially on a new main platform.
++        # Reward discovering a new platform.
+         if landed:
+-            reward += 0.75
++            reward += 2.0
+ 
+-        # Discourage repeatedly walking in place without progress.
++        # Small penalty for making no progress.
+         if abs(progress) < 0.10:
+-            reward -= 0.01
++            reward -= 0.015
++
++        # Encourage horizontal movement toward the goal.
++        goal_dx_old = self.goal[0] - self.player.x
++        goal_direction = 1.0 if goal_dx_old > 0 else -1.0
++
++        if self.player.vx * goal_direction > 0.5:
++            reward += 0.015
++
++        # Penalize substantial movement away from the goal.
++        if self.player.vx * goal_direction < -0.5:
++            reward -= 0.02
+ 
+         # Hazards / enemies / fall are terminal and strongly negative.
+         if self._check_hazard_collision():
+@@ -405,7 +430,7 @@ class MockPlatformEnv(BaseEnv):
+             return (
+                 self._get_state(),
+                 self._frame(),
+-                -15.0,
++                -1.5,
+                 True,
+                 {
+                     "reached_goal": False,
+@@ -420,7 +445,7 @@ class MockPlatformEnv(BaseEnv):
+             return (
+                 self._get_state(),
+                 self._frame(),
+-                -15.0,
++                -1.5,
+                 True,
+                 {
+                     "reached_goal": False,
+@@ -435,7 +460,7 @@ class MockPlatformEnv(BaseEnv):
+             return (
+                 self._get_state(),
+                 self._frame(),
+-                -20.0,
++                -2.0,
+                 True,
+                 {
+                     "reached_goal": False,
+@@ -456,7 +481,7 @@ class MockPlatformEnv(BaseEnv):
+             return (
+                 self._get_state(),
+                 self._frame(),
+-                50.0,
++                5.0,
+                 True,
+                 {
+                     "reached_goal": True,
+@@ -471,7 +496,7 @@ class MockPlatformEnv(BaseEnv):
+             return (
+                 self._get_state(),
+                 self._frame(),
+-                -8.0,
++                -1.8,
+                 True,
+                 {
+                     "reached_goal": False,
+diff --git a/member3_rl/dqn.py b/member3_rl/dqn.py
+index b8970b5..ee11781 100644
+--- a/member3_rl/dqn.py
++++ b/member3_rl/dqn.py
+@@ -24,7 +24,7 @@ class QNetwork(nn.Module):
+ 
+ 
+ class ReplayBuffer:
+-    def __init__(self, capacity=50000):
++    def __init__(self, capacity=150000):
+         self.buffer = deque(maxlen=capacity)
+ 
+     def add(self, state, action, reward, next_state, done):
+@@ -55,12 +55,12 @@ class DQNAgent:
+         obs_dim=64,
+         action_dim=6,
+         gamma=0.99,
+-        learning_rate=1e-3,
++        learning_rate=2.5e-4,
+         batch_size=64,
+-        target_update=250,
++        target_update=1000,
+         epsilon_start=1.0,
+-        epsilon_end=0.05,
+-        epsilon_decay=10000,
++        epsilon_end=0.10,
++        epsilon_decay=150000,
+     ):
+         self.obs_dim = obs_dim
+         self.action_dim = action_dim
+@@ -235,6 +235,10 @@ class DQNAgent:
+ 
+         self.learn_steps += 1
+ 
++        if self.learn_steps % 500 == 0:
++            avg_q = current_q.mean().item()
++            print(f"    [diag] learn_step={self.learn_steps} avg_q={avg_q:.3f} loss={loss.item():.4f}")
++
+         if self.learn_steps % self.target_update == 0:
+             self.target_network.load_state_dict(
+                 self.q_network.state_dict()
+diff --git a/member3_rl/featurizer.py b/member3_rl/featurizer.py
+index 146930a..9ca959b 100644
+--- a/member3_rl/featurizer.py
++++ b/member3_rl/featurizer.py
+@@ -19,7 +19,7 @@ class GameStateFeaturizer:
+       type_id, horizontal_distance
+     """
+ 
+-    OBS_DIM = 65
++    OBS_DIM = 71
+ 
+     def __init__(
+         self,
+@@ -53,17 +53,45 @@ class GameStateFeaturizer:
+             1.0,
+         )
+ 
++    @staticmethod
++    def _find_next_platform(state, player):
++        platforms = [
++            e for e in state.entities
++            if e.kind in ("platform", "moving_platform")
++        ]
++
++        candidates = []
++
++        for platform in platforms:
++            width = float(
++                platform.extra.get("width", 100)
++            )
++
++            right_edge = platform.x + width
++
++            if right_edge > player.x + 10:
++                candidates.append(platform)
++
++        if not candidates:
++            return None
++
++        return min(
++            candidates,
++            key=lambda p: p.x
++        )
+     def _platform_features(self, entity, player):
+-        dx = entity.x - player.x
++        width = entity.extra.get("width", 100)
++        near_edge_dx = entity.x - player.x
++        far_edge_dx = (entity.x + width) - player.x
+         dy = entity.y - player.y
+ 
+         return [
+-            self._normalize(dx, self.position_scale),
++            self._normalize(near_edge_dx, self.position_scale),
++            self._normalize(far_edge_dx, self.position_scale),
+             self._normalize(dy, self.position_scale),
+-            self._normalize(entity.extra.get("width", 100), 160.0),
+-            self._normalize(entity.vy, self.velocity_scale),
++            self._normalize(width, 160.0),
+             self._type_id(entity.kind) / 2.0,
+-            self._normalize(abs(dx), self.distance_scale),
++            self._normalize(min(abs(near_edge_dx), abs(far_edge_dx)), self.distance_scale),
+         ]
+ 
+     def _hazard_features(self, entity, player):
+@@ -86,6 +114,33 @@ class GameStateFeaturizer:
+             self._normalize(entity.vx, self.velocity_scale),
+         ]
+ 
++    @staticmethod
++    def _is_grounded(state):
++        player = state.player
++        bottom = player.y + 32.0
++
++        for platform in state.entities:
++            if platform.kind not in ("platform", "moving_platform"):
++                continue
++
++            width = float(
++                platform.extra.get("width", 100)
++            )
++
++            overlap = (
++                player.x + 24.0 > platform.x
++                and player.x < platform.x + width
++            )
++
++            close_to_top = abs(
++                bottom - platform.y
++            ) < 3.0
++
++            if overlap and close_to_top and abs(player.vy) < 0.5:
++                return True
++
++        return False
++
+     def transform(
+         self,
+         state: GameState,
+@@ -98,6 +153,8 @@ class GameStateFeaturizer:
+         goal_dy = state.goal[1] - player.y
+         goal_dist = np.hypot(goal_dx, goal_dy)
+ 
++        is_grounded = 1.0 if self._is_grounded(state) else 0.0
++
+         features = [
+             self._normalize(player.x, 450.0),
+             self._normalize(player.y, 300.0),
+@@ -106,9 +163,25 @@ class GameStateFeaturizer:
+             self._normalize(goal_dx, self.position_scale),
+             self._normalize(goal_dy, self.position_scale),
+             self._normalize(goal_dist, self.distance_scale),
+-            self._normalize(state.tick, self.tick_scale),
++            is_grounded,
+         ]
+ 
++        # Explicit next-platform information
++        next_platform = self._find_next_platform(
++            state,
++            player
++        )
++
++        if next_platform is not None:
++            features.extend(
++                self._platform_features(
++                    next_platform,
++                    player
++                )
++            )
++        else:
++            features.extend([0.0] * 6)
++
+         entities = list(state.entities)
+ 
+         platforms = [
+@@ -118,9 +191,27 @@ class GameStateFeaturizer:
+         hazards = [e for e in entities if e.kind == "hazard"]
+         enemies = [e for e in entities if e.kind == "enemy"]
+ 
+-        platforms.sort(
++        # Prioritize the main route: static platforms are ordered left-to-right.
++        # Moving platforms are considered only after the main route.
++        static_platforms = [
++            e for e in platforms
++            if e.kind == "platform"
++        ]
++
++        moving_platforms = [
++            e for e in platforms
++            if e.kind == "moving_platform"
++        ]
++
++        # Main route ordering is important for navigation.
++        static_platforms.sort(key=lambda e: e.x)
++
++        # Moving platforms remain available as secondary information.
++        moving_platforms.sort(
+             key=lambda e: abs(e.x - player.x)
+         )
++
++        platforms = static_platforms + moving_platforms
+         hazards.sort(
+             key=lambda e: abs(e.x - player.x)
+         )
+@@ -170,3 +261,6 @@ class GameStateFeaturizer:
+         )
+ 
+         return obs
++
++
++
+diff --git a/member3_rl/trainDQN.py b/member3_rl/trainDQN.py
+index 0e931df..198267d 100644
+--- a/member3_rl/trainDQN.py
++++ b/member3_rl/trainDQN.py
+@@ -12,8 +12,9 @@ from member3_rl.policy import DQNPolicy
+ # CONFIGURATION
+ # ============================================================
+ 
+-NUM_EPISODES = 1000
+-MAX_STEPS = 250
++CURRICULUM_EPISODES = 1400
++NUM_EPISODES = 500
++MAX_STEPS = 300
+ 
+ EVAL_EVERY = 50
+ EVAL_EPISODES = 20
+@@ -77,6 +78,9 @@ def train():
+ 
+         env.rng = np.random.default_rng(episode_seed)
+ 
++        difficulty = min(1.0, episode / CURRICULUM_EPISODES)
++        env.set_difficulty(difficulty)
++
+         state, frame = env.reset()
+ 
+         episode_reward = 0.0
+@@ -298,6 +302,7 @@ def evaluate(policy, start_seed=10000, episodes=20):
+ 
+     total_reward = 0.0
+     successful = 0
++    fail_reasons = {"timeout": 0, "hazard": 0, "enemy": 0, "fell": 0, "other": 0}
+ 
+     for i in range(episodes):
+ 
+@@ -336,12 +341,17 @@ def evaluate(policy, start_seed=10000, episodes=20):
+                 successful += 1
+ 
+             if done:
++                if not info.get("reached_goal", False):
++                    reason = info.get("reason", "timeout" if info.get("timeout") else "other")
++                    fail_reasons[reason] = fail_reasons.get(reason, 0) + 1
+                 break
+ 
+         total_reward += episode_reward
+ 
+     average_reward = total_reward / episodes
+ 
++    print(f"  Failure breakdown: {fail_reasons}")
++
+     return average_reward, successful
+ 
+ 
+@@ -350,4 +360,4 @@ def evaluate(policy, start_seed=10000, episodes=20):
+ # ============================================================
+ 
+ if __name__ == "__main__":
+-    train()
+\ No newline at end of file
++    train()

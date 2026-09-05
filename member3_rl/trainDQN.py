@@ -13,7 +13,7 @@ from member3_rl.policy import DQNPolicy
 # ============================================================
 
 CURRICULUM_EPISODES = 1400
-NUM_EPISODES = 500
+NUM_EPISODES = 2500
 MAX_STEPS = 300
 
 EVAL_EVERY = 50
