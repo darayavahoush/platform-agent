@@ -1,7 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip } from 'recharts'
 import { mono } from '../theme.js'
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, showRisk }) {
   if (!active || !payload || !payload.length) return null
   return (
     <div style={{
@@ -9,17 +9,16 @@ function CustomTooltip({ active, payload, label }) {
       padding: '8px 10px', fontFamily: mono, fontSize: 11,
     }}>
       <div style={{ color: 'var(--text-dim)', marginBottom: 4 }}>TICK {label}</div>
-      <div style={{ color: 'var(--risk)' }}>risk {payload[0]?.value?.toFixed(2)}</div>
-      <div style={{ color: 'var(--live)' }}>reward Σ {payload[1]?.value?.toFixed(2)}</div>
+      {showRisk && <div style={{ color: 'var(--risk)' }}>risk {payload[0]?.value?.toFixed(2)}</div>}
+      <div style={{ color: 'var(--live)' }}>reward Σ {payload[showRisk ? 1 : 0]?.value?.toFixed(2)}</div>
     </div>
   )
 }
 
-function Legend() {
-  const items = [
-    { color: 'var(--risk)', text: 'Risk' },
-    { color: 'var(--live)', text: 'Reward (Σ)' },
-  ]
+function Legend({ showRisk }) {
+  const items = showRisk
+    ? [{ color: 'var(--risk)', text: 'Risk' }, { color: 'var(--live)', text: 'Reward (Σ)' }]
+    : [{ color: 'var(--live)', text: 'Reward (Σ)' }]
   return (
     <div style={{ display: 'flex', gap: 14, marginBottom: 4 }}>
       {items.map(i => (
@@ -32,14 +31,18 @@ function Legend() {
   )
 }
 
-export default function TelemetryChart({ ticks, idx, onScrub }) {
+// mode: 'planning' (has per-tick risk from the A*/MCTS planner) or
+// 'rl' (PPO ticks carry no risk score, so that line is omitted rather than
+// showing a flat/undefined series).
+export default function TelemetryChart({ ticks, idx, onScrub, mode = 'planning' }) {
   if (!ticks?.length) return null
+  const showRisk = mode === 'planning'
   const data = ticks.map(t => ({ t: t.t, risk: t.risk, reward: t.reward_total }))
   const currentT = ticks[idx]?.t
 
   return (
     <div>
-      <Legend />
+      <Legend showRisk={showRisk} />
       <div style={{ height: 82 }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -61,8 +64,10 @@ export default function TelemetryChart({ ticks, idx, onScrub }) {
             </defs>
             <XAxis dataKey="t" hide />
             <YAxis hide domain={['auto', 'auto']} />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--line)' }} />
-            <Area type="monotone" dataKey="risk" stroke="#F2A44A" strokeWidth={1.5} fill="url(#riskFill)" isAnimationActive={false} />
+            <Tooltip content={<CustomTooltip showRisk={showRisk} />} cursor={{ stroke: 'var(--line)' }} />
+            {showRisk && (
+              <Area type="monotone" dataKey="risk" stroke="#F2A44A" strokeWidth={1.5} fill="url(#riskFill)" isAnimationActive={false} />
+            )}
             <Area type="monotone" dataKey="reward" stroke="#45E0C4" strokeWidth={1.5} fill="url(#rewardFill)" isAnimationActive={false} />
             <ReferenceLine x={currentT} stroke="#E7ECF2" strokeWidth={1} strokeDasharray="2 2" />
           </AreaChart>

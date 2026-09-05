@@ -42,11 +42,22 @@ export default function About({ onClose }) {
         </p>
 
         <p style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--text)', margin: '0 0 14px' }}>
-          This page isn't a live agent — it's a <strong>replay viewer</strong>. The pipeline runs
-          offline, every tick gets dumped to <code style={{ fontFamily: mono, fontSize: 12 }}>trace.json</code>,
-          and the dashboard just scrubs through that fixed recording. The run shown here was
-          produced by Planning's A*/MCTS search alone; Policy and Mission are implemented and
-          wired in, but weren't driving this particular recording.
+          This page isn't a live agent — it's a <strong>replay viewer</strong>. Each run is generated
+          offline and dumped tick-by-tick to a trace file; the dashboard just scrubs through that
+          fixed recording. Use the PLANNING / RL AGENT toggle above to switch between the two
+          recordings.
+        </p>
+
+        <p style={{ fontSize: 13.5, lineHeight: 1.65, color: 'var(--text)', margin: '0 0 14px' }}>
+          <strong>PLANNING</strong> replays Member 2's A*/MCTS search on the flat demo tile level
+          (<code style={{ fontFamily: mono, fontSize: 12 }}>demo/demo_env.py</code>). <strong>RL AGENT</strong> replays
+          Member 3's trained PPO policy acting greedily in its own native training world
+          (<code style={{ fontFamily: mono, fontSize: 12 }}>core/env.py</code>'s continuous-physics environment —
+          gravity, jump arcs, no fixed tile grid). These are two different worlds with incompatible
+          observation spaces, which is why the RL policy isn't simply dropped into the tile-level
+          loop: the recording shown is one genuine episode on an unseen seed, and this checkpoint's
+          own rigorous evaluation (100 unseen episodes) lands around a 31% success rate — most
+          individual episodes don't reach the goal.
         </p>
 
         <div style={{ ...{}, borderTop: '1px solid var(--line)', margin: '16px 0', paddingTop: 14 }}>

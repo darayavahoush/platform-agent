@@ -76,7 +76,7 @@ def main():
         if done:
             break
 
-    out_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "trace.json")
+    out_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "trace.json")
     with open(out_path, "w") as f:
         json.dump(trace, f)
 

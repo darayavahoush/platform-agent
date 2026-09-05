@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Play, Pause, Radio, Info } from 'lucide-react'
 import CanvasViewport from './components/CanvasViewport.jsx'
+import RLViewport from './components/RLViewport.jsx'
 import ModulePanel from './components/ModulePanel.jsx'
 import Ticker from './components/Ticker.jsx'
 import TelemetryChart from './components/TelemetryChart.jsx'
@@ -15,8 +16,21 @@ const SPEEDS = [
   { label: '12×', ms: 5 },
 ]
 
+const VIEWS = [
+  { key: 'planning', label: 'PLANNING', file: 'trace.json' },
+  { key: 'rl', label: 'RL AGENT', file: 'rl_trace.json' },
+]
+
+function loadTrace(file) {
+  return fetch(`${import.meta.env.BASE_URL}${file}`).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    return r.json()
+  })
+}
+
 export default function App() {
-  const [trace, setTrace] = useState(null)
+  const [view, setView] = useState('planning')
+  const [traces, setTraces] = useState({ planning: null, rl: null })
   const [loadError, setLoadError] = useState(null)
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -24,21 +38,29 @@ export default function App() {
   const [showAbout, setShowAbout] = useState(false)
   const timerRef = useRef(null)
 
+  // Both traces are loaded up front so switching views is instant and
+  // doesn't need its own loading state.
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}trace.json`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(setTrace)
+    Promise.all(VIEWS.map(v => loadTrace(v.file)))
+      .then(([planning, rl]) => setTraces({ planning, rl }))
       .catch(err => {
-        console.error('Failed to load trace.json', err)
+        console.error('Failed to load trace data', err)
         setLoadError(err.message)
       })
   }, [])
 
+  // Reset playback position when switching views — the two traces have
+  // unrelated tick counts/timelines.
+  useEffect(() => {
+    setPlaying(false)
+    setIdx(0)
+  }, [view])
+
+  const trace = traces[view]
   const ticks = trace?.ticks
-  const level = trace?.level
+  const level = trace?.level       // planning-mode static tile level
+  const world = trace?.world       // rl-mode world bounds
+  const isRL = view === 'rl'
 
   const step = useCallback(() => {
     setIdx(i => {
@@ -82,14 +104,16 @@ export default function App() {
         minHeight: '100vh', display: 'grid', placeItems: 'center', textAlign: 'center',
         fontFamily: mono, color: 'var(--danger)', fontSize: 12, letterSpacing: '.05em', padding: 24,
       }}>
-        FAILED TO LOAD trace.json — {loadError}
+        FAILED TO LOAD TRACE DATA — {loadError}
         <br />
-        <span style={{ color: 'var(--text-dim)' }}>Regenerate it with `python3 demo/run_demo.py` from the repo root.</span>
+        <span style={{ color: 'var(--text-dim)' }}>
+          Regenerate with `python3 demo/run_demo.py` (planning) or `python3 demo/run_rl_demo.py` (RL) from the repo root.
+        </span>
       </div>
     )
   }
 
-  if (!trace || !ticks?.length) {
+  if (!traces.planning || !traces.rl) {
     return (
       <div style={{
         minHeight: '100vh', display: 'grid', placeItems: 'center',
@@ -100,7 +124,19 @@ export default function App() {
     )
   }
 
+  if (!ticks?.length) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'grid', placeItems: 'center',
+        fontFamily: mono, color: 'var(--text-dim)', fontSize: 12, letterSpacing: '.1em',
+      }}>
+        TRACE HAS NO TICKS
+      </div>
+    )
+  }
+
   const frame = ticks[idx]
+  const activeModule = isRL ? 'policy' : 'planning'
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -126,28 +162,54 @@ export default function App() {
               NAV_TRACE
             </h1>
             <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--text-dim)' }}>
-              4-module autonomous platformer agent · replaying Level 01 via the A*/MCTS planner
+              {isRL
+                ? "4-module autonomous platformer agent · replaying the trained PPO policy's own training world"
+                : '4-module autonomous platformer agent · replaying Level 01 via the A*/MCTS planner'}
             </p>
           </div>
-          <button
-            onClick={() => setShowAbout(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontFamily: mono, fontSize: 11, letterSpacing: '.06em',
-              background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--text)',
-              padding: '8px 14px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
-            }}
-          >
-            <Info size={13} /> ABOUT
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden',
+            }}>
+              {VIEWS.map(v => (
+                <button
+                  key={v.key}
+                  onClick={() => setView(v.key)}
+                  style={{
+                    fontFamily: mono, fontSize: 11, letterSpacing: '.06em', fontWeight: 600,
+                    padding: '8px 14px', cursor: 'pointer', border: 'none',
+                    background: view === v.key ? 'var(--live-dim)' : 'var(--panel)',
+                    color: view === v.key ? 'var(--live)' : 'var(--text-dim)',
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowAbout(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontFamily: mono, fontSize: 11, letterSpacing: '.06em',
+                background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--text)',
+                padding: '8px 14px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              <Info size={13} /> ABOUT
+            </button>
+          </div>
         </header>
 
         <div style={{ padding: '16px 28px', borderBottom: '1px solid var(--line)' }}>
-          <PipelineFlow />
+          <PipelineFlow activeModule={activeModule} />
         </div>
 
         <div style={{ padding: '14px 28px 0', borderBottom: '1px solid var(--line)' }}>
-          <TelemetryChart ticks={ticks} idx={idx} onScrub={(i) => { setPlaying(false); setIdx(Math.max(0, Math.min(i, ticks.length - 1))) }} />
+          <TelemetryChart
+            ticks={ticks} idx={idx} mode={isRL ? 'rl' : 'planning'}
+            onScrub={(i) => { setPlaying(false); setIdx(Math.max(0, Math.min(i, ticks.length - 1))) }}
+          />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px' }}>
@@ -157,10 +219,24 @@ export default function App() {
               textTransform: 'uppercase', marginBottom: 10, display: 'flex', justifyContent: 'space-between',
             }}>
               <span>Agent Viewport</span>
-              <span>Path Risk <b style={{ color: 'var(--live)' }}>{frame.risk.toFixed(2)}</b></span>
+              {isRL ? (
+                <span>Reward Σ <b style={{ color: 'var(--live)' }}>{frame.reward_total?.toFixed(2) ?? '—'}</b></span>
+              ) : (
+                <span>Path Risk <b style={{ color: 'var(--live)' }}>{frame.risk?.toFixed(2) ?? '—'}</b></span>
+              )}
             </div>
 
-            <CanvasViewport level={level} ticks={ticks} idx={idx} />
+            {isRL ? (
+              <RLViewport
+                world={world}
+                playerSize={trace.player_size}
+                staticGeo={trace.static}
+                ticks={ticks}
+                idx={idx}
+              />
+            ) : (
+              <CanvasViewport level={level} ticks={ticks} idx={idx} />
+            )}
 
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
               <button
@@ -198,12 +274,20 @@ export default function App() {
                 </select>
               </div>
             </div>
+
+            {isRL && trace.outcome && (
+              <p style={{ marginTop: 10, fontFamily: mono, fontSize: 10.5, color: 'var(--text-dim)' }}>
+                Seed {trace.seed} · {trace.outcome.reached_goal ? 'reached goal' : `ended: ${trace.outcome.reason}`} ·{' '}
+                {trace.outcome.steps} ticks · this is one recorded episode, not the aggregate ~31% rigorous-eval success
+                rate reported for this checkpoint.
+              </p>
+            )}
           </main>
 
-          <ModulePanel />
+          <ModulePanel activeModule={activeModule} />
         </div>
 
-        <Ticker frame={frame} />
+        <Ticker frame={frame} mode={isRL ? 'rl' : 'planning'} />
       </div>
 
       {showAbout && <About onClose={() => setShowAbout(false)} />}
