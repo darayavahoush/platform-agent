@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { mono } from '../theme.js'
 
 const groundY = 150
 
@@ -17,6 +18,14 @@ function enemyTile(level, t) {
   return lo + Math.abs(cyc - span)
 }
 
+const LEGEND = [
+  { color: '#E7ECF2', label: 'Agent' },
+  { color: '#F2545B', label: 'Enemy' },
+  { color: '#F2A44A', label: 'Moving platform' },
+  { color: '#F2E14A', label: 'Collectible' },
+  { color: '#45E0C4', label: 'Goal / trail' },
+]
+
 export default function CanvasViewport({ level, ticks, idx }) {
   const canvasRef = useRef(null)
   const TW = level.tile_w
@@ -26,9 +35,9 @@ export default function CanvasViewport({ level, ticks, idx }) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
     const frame = ticks[idx]
+    if (!canvas || !frame) return
+    const ctx = canvas.getContext('2d')
 
     ctx.clearRect(0, 0, W, H)
 
@@ -111,6 +120,17 @@ export default function CanvasViewport({ level, ticks, idx }) {
       background: 'radial-gradient(circle at 30% 20%, rgba(69,224,196,0.04), transparent 60%), #0C1218',
     }}>
       <canvas ref={canvasRef} width={W} height={H} style={{ display: 'block', width: '100%', height: 'auto' }} />
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '6px 16px', padding: '8px 12px',
+        borderTop: '1px solid var(--line)', background: 'var(--panel)',
+      }}>
+        {LEGEND.map(l => (
+          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: mono, fontSize: 10, color: 'var(--text-dim)' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.color, display: 'inline-block' }} />
+            {l.label}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
